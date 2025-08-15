@@ -1,1 +1,152 @@
-test
+# Save the provided markdown specification into a file so the user can download it.
+
+markdown_content = """# サンプルプログラム仕様書（Gemini API呼び出し対応）
+
+## 1. 概要
+
+このサンプルプログラムは、**iPhoneアプリからGemini AIを呼び出す**最小構成を示すもので、ユーザーが自身のAPIキーを提供する場合と提供しない場合の両方に対応します。
+
+- **キーありモード**：ユーザー提供のAPIキーでGenkitサーバを経由してGemini APIを呼び出す  
+- **キーなしモード**：Firebase AI Logicを経由してGoogle管理のAPIキーでGemini APIを呼び出す  
+
+---
+
+## 2. システム構成
+
+### 登場人物（コンポーネント）
+
+| コンポーネント | 技術 | 役割 |
+|----------------|------|------|
+| iPhoneアプリ | Swift / SwiftUI / Firebase iOS SDK | ユーザー入力UI・プロンプト送信・応答表示 |
+| Genkitサーバ | Node.js + Express + @genkit-ai/core + @google/generative-ai | ユーザーAPIキー利用時の安全な中継サーバ |
+| Firebase AI Logic | Firebase提供マネージドサービス | ユーザーキーなし時の安全なGemini API呼び出し |
+| Gemini API本体 | Google Generative AI | 実際のAI生成処理 |
+
+---
+
+### シーケンス（最終版）
+
+```mermaid
+sequenceDiagram
+    participant iOSApp as iPhoneアプリ<br/>(Swift)
+    participant Firebase as Firebase AI Logic<br/>(Google提供)
+    participant GenkitServer as Genkitサーバ兼プロキシ<br/>(Node.js + @genkit-ai/core + @google/generative-ai)
+    participant Gemini as Gemini API本体
+
+    Note over iOSApp: アプリ起動時にユーザーAPIキー有無を判定
+
+    alt ユーザーがAPIキーを提供
+        iOSApp->>GenkitServer: ユーザーAPIキー + プロンプト送信
+        GenkitServer->>Gemini: (ユーザーAPIキー) リクエスト
+        Gemini-->>GenkitServer: AI応答
+        GenkitServer-->>iOSApp: AI応答
+    else ユーザーがAPIキーを未提供
+        iOSApp->>Firebase: プロンプト送信 (Firebase iOS SDK)
+        Firebase->>Gemini: (開発者APIキーを内部利用)
+        Gemini-->>Firebase: AI応答
+        Firebase-->>iOSApp: AI応答
+    end
+```
+
+---
+
+## 3. iOSアプリ仕様
+
+- **UI**  
+  - ユーザーAPIキー入力フィールド（任意）  
+  - プロンプト入力フィールド  
+  - 送信ボタン  
+  - AI応答表示ラベル  
+
+- **動作**  
+  1. ユーザーがAPIキーを入力 → 保存（Keychainに格納）  
+  2. ユーザーが入力したプロンプトを送信  
+  3. APIキーあり → Genkitサーバ経由でGemini API呼び出し  
+  4. APIキーなし → Firebase AI Logic経由でGemini API呼び出し  
+  5. 応答を表示  
+
+- **永続化**  
+  - ユーザーAPIキーは**Keychain**に保存  
+  - アプリ再起動後も利用可能  
+
+- **技術**  
+  - Swift 5 / SwiftUI  
+  - Firebase iOS SDK (Vertex AI / AI Logic)  
+  - Keychainアクセス (Keychain APIまたはKeychainWrapper)  
+
+---
+
+## 4. Genkitサーバ仕様
+
+- **APIエンドポイント**  
+  - POST `/generate`  
+  - リクエストJSON:  
+    ```json
+    {
+      "apiKey": "ユーザー提供APIキー",
+      "prompt": "生成したいテキスト"
+    }
+    ```  
+  - レスポンスJSON:  
+    ```json
+    {
+      "response": "生成されたテキスト"
+    }
+    ```
+
+- **処理内容**  
+  1. ユーザーAPIキーとプロンプトを受け取る  
+  2. `@google/generative-ai` を使用してGemini APIを呼び出す  
+  3. 生成結果をiOSアプリに返す  
+
+- **技術**  
+  - Node.js 20+  
+  - Express 4.18+  
+  - @genkit-ai/core  
+  - @google/generative-ai  
+
+- **セキュリティ**  
+  - HTTPS必須  
+  - APIキーはサーバ内でのみ保持  
+  - ログにキーを出力しない  
+
+---
+
+## 5. Firebase AI Logic仕様
+
+- **使用条件**  
+  - ユーザーAPIキーが未提供のときのみ利用  
+  - FirebaseコンソールでAI Logicを有効化  
+
+- **役割**  
+  - Google管理のAPIキーを使い、Gemini API呼び出しを安全に中継  
+
+- **技術**  
+  - Firebase iOS SDK  
+  - 内部で安全にGemini APIへHTTPS通信  
+
+---
+
+## 6. 開発環境と前提
+
+- iOS: Xcode 15+、Swift 5+  
+- Node.js: v20+  
+- npmパッケージ: express, @genkit-ai/core, @google/generative-ai, body-parser  
+- Firebase: iOS SDK, Vertex AI / AI Logic  
+- サーバとクライアントはHTTPS通信  
+
+---
+
+## 7. 今後の拡張点（オプション）
+
+- Keychainに保存したユーザーAPIキーにFaceID / TouchIDロックを追加  
+- Genkitサーバにキャッシュ機構を導入して同一プロンプトの呼び出しを最適化  
+- エラーハンドリングやRate Limit制御の強化  
+- Firebase AI Logicの複数モデル対応  
+"""
+
+file_path = "/mnt/data/gemini_sample_spec.md"
+with open(file_path, "w", encoding="utf-8") as f:
+    f.write(markdown_content)
+
+file_path
